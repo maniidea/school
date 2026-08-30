@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hari Mandir School - LMS & Assessment Portal</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+</head>
+<body>
+
+<header>
+  <div class="logo-area">
+    <h2>🏫 Hari Mandir School Portal</h2>
+  </div>
+  <div class="header-right">
+    <span id="userBadge" class="user-pill hidden"></span>
+    <button id="btnOpenLogin" class="btn btn-outline" onclick="openModal('loginModal')">🔑 Sign In</button>
+    <button id="btnOpenSignup" class="btn btn-secondary" onclick="openModal('signupModal')">📝 Student / Aspirant Sign Up</button>
+    <button id="btnLogout" class="btn btn-outline hidden" onclick="logout()">Logout</button>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- NAVIGATION TABS -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('play', this)">📝 Attend Test</button>
+    <button class="tab-btn hidden" id="tabMyScores" onclick="switchTab('reports', this)">📊 My Scores</button>
+    <button class="tab-btn teacher-principal-only hidden" onclick="switchTab('create', this)">✍️ Create Questions</button>
+    <button class="tab-btn teacher-principal-only hidden" onclick="switchTab('manage', this)">🗂️ Question Bank</button>
+    <button class="tab-btn teacher-only hidden" onclick="switchTab('teacherScores', this)">📈 Student Scores (Assigned)</button>
+    <button class="tab-btn principal-only hidden" onclick="switchTab('principal', this)">👑 Principal Master Board</button>
+  </div>
+
+  <!-- TAB 1: ATTEND TEST -->
+  <div id="playTab">
+    <div id="guestBanner" class="card" style="background:#fff8e1; border-color:#ffe082; padding:12px 18px;">
+      <strong>👋 Welcome, Guest Student!</strong> You can attempt up to 10 questions on any standard and topic. Sign In or Sign Up to unlock your class tests, unlimited questions, and permanent score records.
+    </div>
+
+    <div id="quizSetupCard" class="card">
+      <h3>🎯 Assessment Arena</h3>
+      <p class="notice" id="playScopeNotice">Select your Standard, Subject, Unit/Chapter, and Topic to begin.</p>
+      
+      <div class="grid-2">
+        <div class="form-group">
+          <label>Class / Standard:</label>
+          <select id="playStdSelect" onchange="syncPlaySubjects()"></select>
+        </div>
+        <div class="form-group">
+          <label>Subject:</label>
+          <select id="playSubSelect" onchange="syncPlayChapters()"></select>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="form-group">
+          <label>Unit / Chapter:</label>
+          <select id="playChapterSelect" onchange="syncPlayTopics()"></select>
+        </div>
+        <div class="form-group">
+          <label>Topic:</label>
+          <select id="playTopicSelect"></select>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="form-group">
+          <label>Question Count:</label>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input type="number" id="playCountInput" min="1" max="10" value="5" style="flex:1;">
+            <label style="font-size:0.85rem; white-space:nowrap; cursor:pointer;">
+              <input type="checkbox" id="playAllCheckbox" onchange="toggleSelectAll(this.checked)" style="width:auto;" disabled> All Available
+            </label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Timer per Question:</label>
+          <select id="playTimerSelect">
+            <option value="0">No Timer</option>
+            <option value="15">15 Seconds</option>
+            <option value="20" selected>20 Seconds</option>
+            <option value="30">30 Seconds</option>
+            <option value="60">60 Seconds</option>
+          </select>
+        </div>
+      </div>
+
+      <button class="btn btn-primary w-100 margin-top" onclick="startQuiz()">🚀 Start Assessment</button>
+    </div>
+
+    <!-- ACTIVE TEST CARD -->
+    <div id="quizActiveCard" class="card hidden">
+      <div class="quiz-top-bar">
+        <span id="quizProgressBadge" class="badge-pill">Question 1 / 5</span>
+        <div id="timerContainer" class="timer-badge">⏱️ Time Left: <span id="timerText">20s</span></div>
+      </div>
+      <div id="timerBarTrack" class="timer-bar-track">
+        <div id="timerBarFill" class="timer-bar-fill"></div>
+      </div>
+      <div id="singleQuestionArea" style="margin-top:15px;"></div>
+      <div class="quiz-footer-actions">
+        <button id="btnNextQuestion" class="btn btn-primary" onclick="nextQuestion(false)">Next Question ⏩</button>
+      </div>
+    </div>
+
+    <!-- RESULT SCORECARD -->
+    <div id="quizResultCard" class="card text-center hidden">
+      <h2>🎉 Assessment Finished!</h2>
+      <div id="resultScoreDisplay" style="font-size: 2.2rem; font-weight: bold; margin: 15px 0; color: var(--primary);"></div>
+      <p id="resultFeedback" style="font-size: 1.1rem;"></p>
+      <button class="btn btn-primary margin-top" onclick="resetQuizView()">Retake / New Test</button>
+    </div>
+  </div>
+
+  <!-- TAB 2: CREATE / AUTHOR QUESTIONS -->
+  <div id="createTab" class="hidden">
+    <div style="display:flex; gap:10px; margin-bottom:15px;">
+      <button id="btnMethodManual" class="btn btn-primary flex-1" onclick="switchCreateMethod('manual')">✍️ Manual Creation</button>
+      <button id="btnMethodAi" class="btn btn-outline-dark flex-1" onclick="switchCreateMethod('ai')">📷 AI Book Parser (PDF / Image)</button>
+    </div>
+
+    <div class="card" style="background:#fcfcfc;">
+      <h4>1. Target Hierarchy</h4>
+      <div class="grid-2">
+        <div class="form-group">
+          <label>Standard:</label>
+          <select id="authorStdSelect" onchange="syncAuthorSubjects()"></select>
+        </div>
+        <div class="form-group">
+          <label>Subject:</label>
+          <select id="authorSubSelect" onchange="syncAuthorChapters()"></select>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label>Unit / Chapter:</label>
+          <input type="text" id="authorChapterInput" placeholder="e.g. Unit 2: Cell Biology" list="chapterSuggestions">
+          <datalist id="chapterSuggestions"></datalist>
+        </div>
+        <div class="form-group">
+          <label>Topic:</label>
+          <input type="text" id="authorTopicInput" placeholder="e.g. Mitochondria Structure">
+        </div>
+      </div>
+    </div>
+
+    <div id="sectionManualCreate" class="card">
+      <h4>2. Question Details</h4>
+      <div class="form-group">
+        <label>Question Statement:</label>
+        <textarea id="manualQuestionText" rows="2" placeholder="Enter question statement..."></textarea>
+      </div>
+      <div class="grid-2">
+        <div class="form-group"><label>Option A:</label><input type="text" id="manualOptA" placeholder="Option A"></div>
+        <div class="form-group"><label>Option B:</label><input type="text" id="manualOptB" placeholder="Option B"></div>
+        <div class="form-group"><label>Option C:</label><input type="text" id="manualOptC" placeholder="Option C"></div>
+        <div class="form-group"><label>Option D:</label><input type="text" id="manualOptD" placeholder="Option D"></div>
+      </div>
+      <div class="form-group">
+        <label>Correct Answer:</label>
+        <select id="manualCorrectOpt">
+          <option value="1">Option A</option>
+          <option value="2">Option B</option>
+          <option value="3">Option C</option>
+          <option value="4">Option D</option>
+        </select>
+      </div>
+      <button class="btn btn-primary w-100 margin-top" onclick="publishManualQuestion()">💾 Publish Question</button>
+    </div>
+
+    <div id="sectionAiCreate" class="card hidden">
+      <h4>2. AI Document / PDF Parser</h4>
+      <div class="grid-2">
+        <div class="form-group">
+          <label>Upload Document (PDF or Photo):</label>
+          <input type="file" id="aiFileInput" accept="image/*,application/pdf">
+        </div>
+        <div class="form-group">
+          <label>Questions to Extract (1 to 100):</label>
+          <input type="number" id="aiQuestionCount" min="1" max="100" value="10" placeholder="e.g. 10, 50">
+        </div>
+      </div>
+      <button class="btn btn-secondary w-100" id="btnExtractAi" onclick="generateViaAI()">⚡ Parse & Generate Questions</button>
+      
+      <div id="aiBatchProgressArea" class="hidden margin-top" style="background:#f8f9fa; padding:15px; border-radius:6px; border:1px solid var(--border);">
+        <div style="display:flex; justify-content:space-between; font-weight:600; font-size:0.9rem; margin-bottom:6px;">
+          <span id="aiBatchStatusText">Extracting...</span>
+          <span id="aiBatchProgressPct">0%</span>
+        </div>
+        <div style="width:100%; height:10px; background:#dee2e6; border-radius:5px; overflow:hidden;">
+          <div id="aiBatchProgressBar" style="width:0%; height:100%; background:var(--secondary); transition:width 0.4s ease;"></div>
+        </div>
+      </div>
+
+      <div id="aiPreviewArea" class="hidden margin-top">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <h4 style="margin:0;">Generated Questions Preview (<span id="aiTotalCountBadge">0</span> Questions Ready)</h4>
+        </div>
+        <div id="aiPreviewList" class="preview-box"></div>
+        <button class="btn btn-success w-100 margin-top" onclick="publishAiBatch()">💾 Publish All Questions to Bank</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3: QUESTION BANK -->
+  <div id="manageTab" class="hidden">
+    <div class="card">
+      <h3>🗂️ Question Bank</h3>
+      <div class="grid-3">
+        <div class="form-group"><label>Search Keyword:</label><input type="text" id="manageSearchInput" oninput="renderManageTable()"></div>
+        <div class="form-group"><label>Filter Standard:</label><select id="manageStdFilter" onchange="renderManageTable()"></select></div>
+        <div class="form-group"><label>Filter Subject:</label><select id="manageSubFilter" onchange="renderManageTable()"></select></div>
+      </div>
+
+      <table class="report-table margin-top">
+        <thead>
+          <tr>
+            <th>Class</th>
+            <th>Subject</th>
+            <th>Chapter / Topic</th>
+            <th>Question & Options</th>
+            <th>Author ID</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="manageTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB 4: MY SCORES -->
+  <div id="reportsTab" class="hidden">
+    <div class="card">
+      <h3>📊 My Assessment History</h3>
+      <div class="grid-2">
+        <div class="form-group"><label>From Date:</label><input type="date" id="repFromDate" onchange="filterUserReports()"></div>
+        <div class="form-group"><label>To Date:</label><input type="date" id="repToDate" onchange="filterUserReports()"></div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group"><label>Standard:</label><select id="repStdFilter" onchange="filterUserReports()"></select></div>
+        <div class="form-group"><label>Subject:</label><select id="repSubFilter" onchange="filterUserReports()"></select></div>
+      </div>
+
+      <div style="display:flex; gap:12px; margin:15px 0;">
+        <div style="flex:1; background:#e8f4fd; border:1px solid #b6d4fe; padding:10px; border-radius:6px; text-align:center;">
+          <div style="font-size:0.8rem; font-weight:bold; color:#084298;">TESTS ATTEMPTED</div>
+          <div id="repStatTotal" style="font-size:1.4rem; font-weight:bold; color:var(--primary);">0</div>
+        </div>
+        <div style="flex:1; background:#e2f0d9; border:1px solid #c3e6cb; padding:10px; border-radius:6px; text-align:center;">
+          <div style="font-size:0.8rem; font-weight:bold; color:#155724;">AVERAGE ACCURACY</div>
+          <div id="repStatAvg" style="font-size:1.4rem; font-weight:bold; color:var(--accent);">0%</div>
+        </div>
+      </div>
+
+      <table class="report-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Class</th>
+            <th>Subject</th>
+            <th>Chapter / Topic</th>
+            <th>Score</th>
+            <th>Percentage</th>
+          </tr>
+        </thead>
+        <tbody id="userScoresTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB 5: TEACHER SCORES -->
+  <div id="teacherScoresTab" class="hidden">
+    <div class="card">
+      <h3>📈 Student Scores (Assigned Classes)</h3>
+      <div class="grid-3">
+        <div class="form-group"><label>Search Student:</label><input type="text" id="tchRepSearchStudent" oninput="filterTeacherStudentScores()"></div>
+        <div class="form-group"><label>Filter Standard:</label><select id="tchRepStdFilter" onchange="filterTeacherStudentScores()"></select></div>
+        <div class="form-group"><label>Filter Subject:</label><select id="tchRepSubFilter" onchange="filterTeacherStudentScores()"></select></div>
+      </div>
+
+      <table class="report-table margin-top">
+        <thead>
+          <tr>
+            <th>Student ID</th>
+            <th>Student Name</th>
+            <th>Class</th>
+            <th>Subject</th>
+            <th>Chapter / Topic</th>
+            <th>Score</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody id="teacherStudentScoresTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB 6: PRINCIPAL MASTER BOARD -->
+  <div id="principalTab" class="hidden">
+    <!-- 1. Teacher Management -->
+    <div class="card">
+      <h3>👑 Teacher Management (Principal Control)</h3>
+      <p class="notice">Provision verified subject teachers with login passwords and class permissions.</p>
+      
+      <div class="grid-3" style="background:#f8f9fa; padding:12px; border-radius:6px; border:1px solid var(--border);">
+        <div class="form-group"><label>Teacher User ID:</label><input type="text" id="newTeacherId" placeholder="e.g. TCH_MATHS01"></div>
+        <div class="form-group"><label>Teacher Full Name:</label><input type="text" id="newTeacherName" placeholder="e.g. Mr. Ramakrishnan"></div>
+        <div class="form-group"><label>Assigned Password:</label><input type="password" id="newTeacherPass" placeholder="e.g. TeacherPass#123"></div>
+      </div>
+      <button class="btn btn-primary margin-top" onclick="principalCreateTeacher()">➕ Create Teacher Account</button>
+
+      <h4 style="margin-top:25px;">Teacher Authorization & Class Assignment Matrix</h4>
+      <table class="report-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Teacher Name</th>
+            <th>Assigned Classes</th>
+            <th>Assigned Subjects</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="principalTeacherTbody"></tbody>
+      </table>
+    </div>
+
+    <!-- 2. Student Authorization & Class Assignment Matrix -->
+    <div class="card">
+      <h3>🎓 Student / Aspirant Class Authorization (Principal Control)</h3>
+      <p class="notice">Assign individual students to take specific classes (e.g. Class 5 and 6) or all classes.</p>
+      <table class="report-table">
+        <thead>
+          <tr>
+            <th>Student ID</th>
+            <th>Name</th>
+            <th>Role / Category</th>
+            <th>Allowed Classes to Attend</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="principalStudentTbody"></tbody>
+      </table>
+    </div>
+
+    <!-- 3. Master Assessment Scores -->
+    <div class="card">
+      <h3>📊 Master Student Assessment Record (All Classes)</h3>
+      <div class="grid-3">
+        <div class="form-group"><label>Search Student:</label><input type="text" id="prFilterStudent" oninput="filterPrincipalScores()"></div>
+        <div class="form-group"><label>Filter Standard:</label><select id="prFilterStd" onchange="filterPrincipalScores()"></select></div>
+        <div class="form-group"><label>Filter Subject:</label><select id="prFilterSub" onchange="filterPrincipalScores()"></select></div>
+      </div>
+
+      <table class="report-table margin-top">
+        <thead>
+          <tr>
+            <th>Student ID</th>
+            <th>Name</th>
+            <th>Class</th>
+            <th>Subject</th>
+            <th>Chapter & Topic</th>
+            <th>Score</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody id="principalScoresTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- SIGN IN MODAL -->
+<div id="loginModal" class="modal-overlay hidden">
+  <div class="modal-content">
+    <button class="modal-close" onclick="closeModal('loginModal')">&times;</button>
+    <h3>Sign In to Portal</h3>
+    <p class="notice">For Principal, Teachers, Students, and TNPSC/UPSC Aspirants.</p>
+    <div class="form-group">
+      <label>User ID / Roll Number:</label>
+      <input type="text" id="loginUserId" placeholder="e.g. PRINCIPAL, TCH_SCI01, STU601, or ASPIRANT01">
+    </div>
+    <div class="form-group">
+      <label>Password:</label>
+      <input type="password" id="loginPassword" placeholder="Enter your password">
+    </div>
+    <button class="btn btn-primary w-100 margin-top" onclick="handleSignIn()">Sign In</button>
+  </div>
+</div>
+
+<!-- STUDENT / ASPIRANT SIGN UP MODAL -->
+<div id="signupModal" class="modal-overlay hidden">
+  <div class="modal-content">
+    <button class="modal-close" onclick="closeModal('signupModal')">&times;</button>
+    <h3>Student / Aspirant Registration</h3>
+    <p class="notice">Teachers are provisioned exclusively by the Principal.</p>
+    
+    <div class="form-group">
+      <label>Select Category:</label>
+      <select id="signupUserType" onchange="toggleSignupCategory(this.value)">
+        <option value="student">School Student (Attends Assigned Class Only)</option>
+        <option value="aspirant">TNPSC / UPSC Aspirant (Attends All Classes 5 to 12)</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Roll Number / User ID:</label>
+      <input type="text" id="signupUserId" placeholder="e.g. STU601 or ASP_TAMIL">
+    </div>
+    <div class="form-group">
+      <label>Full Name:</label>
+      <input type="text" id="signupName" placeholder="e.g. Ramesh Kumar">
+    </div>
+    <div class="form-group" id="signupStdGroup">
+      <label>Assigned Class:</label>
+      <select id="signupStd"></select>
+    </div>
+    <div class="form-group">
+      <label>Create Password:</label>
+      <input type="password" id="signupPassword" placeholder="Enter password">
+    </div>
+    <button class="btn btn-secondary w-100 margin-top" onclick="handleSignUp()">Create Account</button>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
