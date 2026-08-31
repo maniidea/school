@@ -19,8 +19,12 @@ let autoNextTimeout = null;
 let isAnswered = false;
 let extractedAiBatch = [];
 
-const GLOBAL_STANDARDS = ["5", "6", "7", "8", "9", "10", "11", "12"];   
-const GLOBAL_SUBJECTS = ["Science", "Maths", "Social Science", "English", "Tamil", "Botany", "Zoology", "Physics", "Chemistry"];   
+const GLOBAL_STANDARDS = [
+  "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12",
+  "UG-1st-Year", "UG-2nd-Year", "UG-Final-Year", "PG", "Diploma"
+];
+
+const GLOBAL_SUBJECTS = ["Science", "Maths", "Social Science", "English", "Hindi","Tamil", "Botany", "Zoology", "Physics", "Chemistry"];   
 
 function initApp() {
   const savedUser = localStorage.getItem("hmsUser");
@@ -42,36 +46,40 @@ if (document.readyState === "loading") {
 function populateAllDropdowns() {
   const signupStd = document.getElementById("signupStd");
   if (signupStd) {
-    signupStd.innerHTML = GLOBAL_STANDARDS.map(s => `<option value="${s}">Class ${s}</option>`).join("");
+    signupStd.innerHTML = GLOBAL_STANDARDS.map(s => `<option value="${s}">${s}</option>`).join("");
   }
 
-  // Filter play standard dropdown based on the user's allowed scope
+  // Play standard dropdown
   const playStd = document.getElementById("playStdSelect");
   if (playStd) {
     let allowed = GLOBAL_STANDARDS;
     if (currentUser) {
       if (currentUser.role === "student") {
-        allowed = (currentUser.standards && currentUser.standards.length > 0) ? currentUser.standards : ["5"];
+        allowed = (currentUser.standards && currentUser.standards.length > 0) ? currentUser.standards : ["1"];
       } else if (currentUser.role === "aspirant" || currentUser.role === "principal") {
         allowed = GLOBAL_STANDARDS;
       } else if (currentUser.role === "teacher") {
         allowed = (currentUser.standards && currentUser.standards.length > 0) ? currentUser.standards : GLOBAL_STANDARDS;
       }
     }
-    playStd.innerHTML = allowed.map(s => `<option value="${s}">Class ${s}</option>`).join("");
+    playStd.innerHTML = allowed.map(s => `<option value="${s}">${s}</option>`).join("");
     syncPlaySubjects();
   }
 
+  // Author / Create Question standard dropdown
   const authStd = document.getElementById("authorStdSelect");
   if (authStd) {
-    const allowedStds = (currentUser && currentUser.standards && currentUser.standards.length > 0) ? currentUser.standards : GLOBAL_STANDARDS;
-    authStd.innerHTML = allowedStds.map(s => `<option value="${s}">Class ${s}</option>`).join("");
+    let allowedStds = GLOBAL_STANDARDS;
+    if (currentUser && currentUser.role === "teacher") {
+      allowedStds = (currentUser.standards && currentUser.standards.length > 0) ? currentUser.standards : GLOBAL_STANDARDS;
+    }
+    authStd.innerHTML = allowedStds.map(s => `<option value="${s}">${s}</option>`).join("");
     syncAuthorSubjects();
   }
 
   ["manageStdFilter", "repStdFilter", "tchRepStdFilter", "prFilterStd"].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.innerHTML = '<option value="">All Standards</option>' + GLOBAL_STANDARDS.map(s => `<option value="${s}">Class ${s}</option>`).join("");
+    if (el) el.innerHTML = '<option value="">All Standards</option>' + GLOBAL_STANDARDS.map(s => `<option value="${s}">${s}</option>`).join("");
   });
 
   ["manageSubFilter", "repSubFilter", "tchRepSubFilter", "prFilterSub"].forEach(id => {
@@ -129,7 +137,7 @@ function updateAuthUI() {
 
     if (playScopeNotice) {
       if (currentUser.role === "student") {
-        playScopeNotice.innerText = `Attending Class ${currentUser.standards.join(", ")} Assessments. (Contact Principal to adjust class access)`;
+        playScopeNotice.innerText = `Attending Class ${currentUser.standards.join(", ")} Assessments.`;
       } else if (currentUser.role === "aspirant") {
         playScopeNotice.innerText = `TNPSC / UPSC Aspirant Mode: Access to All Classes (5 to 12) and Subjects.`;
       } else {
@@ -466,6 +474,17 @@ function renderCurrentQuestion() {
   }
 }
 
+function showExplanationBox() {
+  const q = activeQuizList[currentQIndex];
+  const area = document.getElementById("singleQuestionArea");
+  if (!area || !q.explanation) return;
+
+  const explBox = document.createElement("div");
+  explBox.className = "explanation-card";
+  explBox.innerHTML = `<strong>💡 Explanation:</strong> ${q.explanation}`;
+  area.appendChild(explBox);
+}
+
 function selectAnswer(opt, btn) {
   if (isAnswered) return;
   isAnswered = true;
@@ -484,8 +503,10 @@ function selectAnswer(opt, btn) {
     if (buttons[correct - 1]) buttons[correct - 1].classList.add("correct");
   }
 
+  showExplanationBox();
+
   if (perQuestionTime > 0) {
-    autoNextTimeout = setTimeout(() => nextQuestion(true), 1800);
+    autoNextTimeout = setTimeout(() => nextQuestion(true), 4500);
   }
 }
 
@@ -504,10 +525,12 @@ function handleTimeUp() {
   tip.style.color = "#c62828";
   tip.style.fontWeight = "bold";
   tip.style.marginTop = "10px";
-  tip.innerText = "⏰ Time's up! Advancing...";
+  tip.innerText = "⏰ Time's up!";
   area.appendChild(tip);
 
-  autoNextTimeout = setTimeout(() => nextQuestion(true), 2000);
+  showExplanationBox();
+
+  autoNextTimeout = setTimeout(() => nextQuestion(true), 4500);
 }
 
 function nextQuestion(auto) {
@@ -577,6 +600,7 @@ async function publishManualQuestion() {
   const optC = document.getElementById("manualOptC").value.trim();
   const optD = document.getElementById("manualOptD").value.trim();
   const correct = Number(document.getElementById("manualCorrectOpt").value);
+  const explanation = (document.getElementById("manualExplanation")?.value || "").trim();
 
   if (!q || !optA || !optB || !optC || !optD) return alert("Please fill all question details.");
 
@@ -590,7 +614,8 @@ async function publishManualQuestion() {
     topic: topic,
     question: q,
     optA, optB, optC, optD,
-    correctOpt: correct
+    correctOpt: correct,
+    explanation: explanation
   };
 
   const data = await callAppsScript(payload);
@@ -601,6 +626,7 @@ async function publishManualQuestion() {
     document.getElementById("manualOptB").value = "";
     document.getElementById("manualOptC").value = "";
     document.getElementById("manualOptD").value = "";
+    if (document.getElementById("manualExplanation")) document.getElementById("manualExplanation").value = "";
     await loadPortalData();
   }
 }
@@ -635,8 +661,8 @@ async function generateViaAI() {
 
   const countInput = document.getElementById("aiQuestionCount");
   let requestedTotal = parseInt(countInput.value, 10);
-  if (!requestedTotal || requestedTotal <= 0) requestedTotal = 10;
-  if (requestedTotal > 100) requestedTotal = 100;
+  if (!requestedTotal || requestedTotal <= 0) requestedTotal = 5;
+  if (requestedTotal > 25) requestedTotal = 25;
 
   const btnExtract = document.getElementById("btnExtractAi");
   const progressArea = document.getElementById("aiBatchProgressArea");
@@ -666,7 +692,7 @@ async function generateViaAI() {
       payloadData = await extractTextFromPDF(file);
       isText = true;
       if (!payloadData || payloadData.trim().length < 20) {
-        throw new Error("No readable text found in PDF (it might be a scanned image).");
+        throw new Error("No readable text found in PDF.");
       }
     } else {
       statusText.innerText = "Reading image data...";
@@ -679,61 +705,31 @@ async function generateViaAI() {
       isText = false;
     }
 
-    const CHUNK_SIZE = 15;
-    const totalBatches = Math.ceil(requestedTotal / CHUNK_SIZE);
-    let questionsCollected = [];
-    let lastError = "";
+    statusText.innerText = `Generating ${requestedTotal} questions in a single request...`;
+    progressPct.innerText = "50%";
+    progressBar.style.width = "50%";
 
-    for (let batch = 1; batch <= totalBatches; batch++) {
-      const remainingNeeded = requestedTotal - questionsCollected.length;
-      const currentBatchCount = Math.min(CHUNK_SIZE, remainingNeeded);
-      if (currentBatchCount <= 0) break;
-
-      const currentPct = Math.round(((batch - 1) / totalBatches) * 100);
-      statusText.innerText = `Extracting Batch ${batch} of ${totalBatches} (${questionsCollected.length}/${requestedTotal} ready)...`;
-      progressPct.innerText = `${currentPct}%`;
-      progressBar.style.width = `${currentPct}%`;
-
-      let batchPayload = payloadData;
-      if (isText && payloadData.length > 6000) {
-        const sliceSize = Math.floor(payloadData.length / totalBatches);
-        const start = (batch - 1) * sliceSize;
-        batchPayload = payloadData.substring(start, start + sliceSize + 2000);
-      }
-
-      const data = await callAppsScript({
-        action: "parseDocument",
-        fileData: batchPayload,
-        isText: isText,
-        count: currentBatchCount,
-        contextInfo: context
-      });
-
-      if (data && data.success && Array.isArray(data.questions) && data.questions.length > 0) {
-        questionsCollected = questionsCollected.concat(data.questions);
-      } else {
-        lastError = (data && data.error) ? data.error : "Batch failed";
-      }
-
-      if (batch < totalBatches) {
-        statusText.innerText = `Pacing next batch...`;
-        await new Promise(r => setTimeout(r, 2000));
-      }
-    }
+    const data = await callAppsScript({
+      action: "parseDocument",
+      fileData: payloadData,
+      isText: isText,
+      count: requestedTotal,
+      contextInfo: context
+    });
 
     progressBar.style.width = "100%";
     progressPct.innerText = "100%";
     btnExtract.disabled = false;
 
-    if (questionsCollected.length > 0) {
-      statusText.innerText = `Generated ${questionsCollected.length} questions successfully!`;
-      extractedAiBatch = questionsCollected.slice(0, requestedTotal);
+    if (data && data.success && Array.isArray(data.questions) && data.questions.length > 0) {
+      statusText.innerText = `Generated ${data.questions.length} questions successfully!`;
+      extractedAiBatch = data.questions;
       document.getElementById("aiTotalCountBadge").innerText = extractedAiBatch.length;
       renderAiPreview(extractedAiBatch);
       previewArea.classList.remove("hidden");
     } else {
       progressArea.classList.add("hidden");
-      alert("Error generating questions:\n" + lastError);
+      alert("Error generating questions:\n" + (data ? data.error : "Unknown error"));
     }
   } catch (err) {
     btnExtract.disabled = false;
@@ -753,6 +749,7 @@ function renderAiPreview(questions) {
       <div style="font-weight:600;">${idx + 1}. ${q.question}</div>
       <div style="font-size:0.85rem; color:#555;">A) ${q.optA} | B) ${q.optB} | C) ${q.optC} | D) ${q.optD}</div>
       <div style="font-size:0.85rem; color:var(--accent); font-weight:bold;">Correct: Option ${q.correctOpt}</div>
+      <div style="font-size:0.82rem; color:#084298; margin-top:3px;"><strong>Explanation:</strong> ${q.explanation || 'N/A'}</div>
     `;
     container.appendChild(item);
   });
@@ -815,6 +812,7 @@ function renderManageTable() {
           <div style="font-weight:600;">${q.question}</div>
           <small>A) ${q.optA} | B) ${q.optB} | C) ${q.optC} | D) ${q.optD}</small><br>
           <small style="color:var(--accent); font-weight:bold;">Correct: Option ${q.correctOpt}</small>
+          ${q.explanation ? `<br><small style="color:#084298;"><strong>Explanation:</strong> ${q.explanation}</small>` : ''}
         </td>
         <td><code>${q.creatorId}</code> (${q.creatorRole})</td>
         <td><button class="btn btn-danger" style="padding:4px 8px; font-size:0.8rem;" onclick="deleteQuestion('${q.id}')">🗑️ Delete</button></td>
