@@ -167,6 +167,10 @@
           <option value="4">Option D</option>
         </select>
       </div>
+      <div class="form-group">
+        <label>Explanation / Rationale:</label>
+        <textarea id="manualExplanation" rows="2" placeholder="Explain why this answer is correct..."></textarea>
+      </div>
       <button class="btn btn-primary w-100 margin-top" onclick="publishManualQuestion()">💾 Publish Question</button>
     </div>
 
@@ -178,15 +182,15 @@
           <input type="file" id="aiFileInput" accept="image/*,application/pdf">
         </div>
         <div class="form-group">
-          <label>Questions to Extract (1 to 100):</label>
-          <input type="number" id="aiQuestionCount" min="1" max="100" value="10" placeholder="e.g. 10, 50">
+          <label>Questions to Extract (1 to 25):</label>
+          <input type="number" id="aiQuestionCount" min="1" max="25" value="10" placeholder="e.g. 10">
         </div>
       </div>
       <button class="btn btn-secondary w-100" id="btnExtractAi" onclick="generateViaAI()">⚡ Parse & Generate Questions</button>
       
       <div id="aiBatchProgressArea" class="hidden margin-top" style="background:#f8f9fa; padding:15px; border-radius:6px; border:1px solid var(--border);">
         <div style="display:flex; justify-content:space-between; font-weight:600; font-size:0.9rem; margin-bottom:6px;">
-          <span id="aiBatchStatusText">Extracting...</span>
+          <span id="aiBatchStatusText">Processing...</span>
           <span id="aiBatchProgressPct">0%</span>
         </div>
         <div style="width:100%; height:10px; background:#dee2e6; border-radius:5px; overflow:hidden;">
@@ -220,7 +224,7 @@
             <th>Class</th>
             <th>Subject</th>
             <th>Chapter / Topic</th>
-            <th>Question & Options</th>
+            <th>Question, Options & Explanation</th>
             <th>Author ID</th>
             <th>Action</th>
           </tr>
