@@ -116,36 +116,40 @@
 
   <!-- TAB 2: CREATE / AUTHOR QUESTIONS -->
   <div id="createTab" class="hidden">
+    <!-- Creation Method Switches -->
     <div style="display:flex; gap:10px; margin-bottom:15px;">
       <button id="btnMethodManual" class="btn btn-primary flex-1" onclick="switchCreateMethod('manual')">✍️ Manual Creation</button>
       <button id="btnMethodAi" class="btn btn-outline-dark flex-1" onclick="switchCreateMethod('ai')">📷 AI Book Parser (PDF / Image)</button>
+      <button id="btnMethodCsv" class="btn btn-outline-dark flex-1" onclick="switchCreateMethod('csv')">📁 CSV Bulk Import</button>
     </div>
 
-    <div class="card" style="background:#fcfcfc;">
+    <!-- Shared Target Hierarchy -->
+    <div class="card" id="targetHierarchyCard" style="background:#fcfcfc;">
       <h4>1. Target Hierarchy</h4>
       <div class="grid-2">
         <div class="form-group">
-          <label>Standard:</label>
-          <select id="authorStdSelect" onchange="syncAuthorSubjects()"></select>
+          <label>Standard / Class:</label>
+          <select id="authorStdSelect" onchange="syncAuthorSubjects(); updateAiPromptPreview();"></select>
         </div>
         <div class="form-group">
           <label>Subject:</label>
-          <select id="authorSubSelect" onchange="syncAuthorChapters()"></select>
+          <select id="authorSubSelect" onchange="syncAuthorChapters(); updateAiPromptPreview();"></select>
         </div>
       </div>
       <div class="grid-2">
         <div class="form-group">
-          <label>Unit / Chapter:</label>
-          <input type="text" id="authorChapterInput" placeholder="e.g. Unit 2: Cell Biology" list="chapterSuggestions">
+          <label>Unit / Chapter (Optional / Detected by AI):</label>
+          <input type="text" id="authorChapterInput" placeholder="e.g. Unit 1: Food" list="chapterSuggestions">
           <datalist id="chapterSuggestions"></datalist>
         </div>
         <div class="form-group">
-          <label>Topic:</label>
-          <input type="text" id="authorTopicInput" placeholder="e.g. Mitochondria Structure">
+          <label>Topic / Section (Optional / Detected by AI):</label>
+          <input type="text" id="authorTopicInput" placeholder="e.g. Food Preservation">
         </div>
       </div>
     </div>
 
+    <!-- SECTION 2A: MANUAL CREATE -->
     <div id="sectionManualCreate" class="card">
       <h4>2. Question Details</h4>
       <div class="form-group">
@@ -174,6 +178,7 @@
       <button class="btn btn-primary w-100 margin-top" onclick="publishManualQuestion()">💾 Publish Question</button>
     </div>
 
+    <!-- SECTION 2B: AI DOCUMENT / PDF PARSER -->
     <div id="sectionAiCreate" class="card hidden">
       <h4>2. AI Document / PDF Parser</h4>
       <div class="grid-2">
@@ -204,6 +209,44 @@
         </div>
         <div id="aiPreviewList" class="preview-box"></div>
         <button class="btn btn-success w-100 margin-top" onclick="publishAiBatch()">💾 Publish All Questions to Bank</button>
+      </div>
+    </div>
+
+    <!-- SECTION 2C: CSV BULK IMPORTER & PROMPT GENERATOR -->
+    <div id="sectionCsvCreate" class="card hidden">
+      <!-- Step 1: AI Studio Prompt Box -->
+      <div style="background:#f0fdf4; border:1px solid #bbf7d0; padding:15px; border-radius:8px; margin-bottom:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <h4 style="margin:0; color:#15803d;">🤖 Step 1: Generate Questions in Google AI Studio</h4>
+          <a href="https://aistudio.google.com/prompts/new_chat" target="_blank" class="btn btn-outline" style="font-size:0.8rem; padding:4px 10px; text-decoration:none;">🚀 Open Google AI Studio</a>
+        </div>
+        <p class="notice" style="margin-bottom:10px; color:#166534;">
+          The prompt below automatically adapts to your selected <strong>Class</strong> and <strong>Subject</strong>. Copy it, paste it into Google AI Studio with your text/PDF, and save the resulting CSV.
+        </p>
+        
+        <div style="position:relative;">
+          <textarea id="aiStudioPromptTextarea" rows="9" readonly style="width:100%; font-family:monospace; font-size:0.8rem; background:#fff; border:1px solid #cbd5e1; border-radius:6px; padding:10px; color:#1e293b; resize:vertical;"></textarea>
+          <button id="btnCopyPrompt" onclick="copyAiStudioPrompt()" class="btn btn-primary" style="position:absolute; top:8px; right:8px; font-size:0.75rem; padding:5px 10px;">📋 Copy Prompt</button>
+        </div>
+      </div>
+
+      <!-- Step 2: Upload CSV File -->
+      <h4>📥 Step 2: Upload Generated CSV File</h4>
+      <p class="notice">Upload your saved <code>questions.csv</code> file. Serial IDs will be calculated sequentially from the last question in Google Sheets.</p>
+      
+      <div class="form-group">
+        <label>Select CSV File (.csv):</label>
+        <input type="file" id="standaloneCsvInput" accept=".csv,text/csv" onchange="handleStandaloneCsv(event)">
+      </div>
+
+      <div id="standaloneCsvPreviewArea" class="hidden margin-top">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <h4 style="margin:0;">CSV Questions Detected (<span id="standaloneCsvCount" style="color:var(--primary); font-weight:bold;">0</span> Records)</h4>
+        </div>
+        <div id="standaloneCsvList" class="preview-box" style="max-height: 250px; overflow-y: auto; background:#fff; padding:10px; border:1px solid var(--border); border-radius:6px;"></div>
+        <button class="btn btn-primary w-100 margin-top" id="btnUploadStandaloneCsv" onclick="submitStandaloneCsvToSheet()">
+          🚀 Upload All to Google Sheet (Auto Serial IDs)
+        </button>
       </div>
     </div>
   </div>
@@ -428,6 +471,78 @@
     <button class="btn btn-secondary w-100 margin-top" onclick="handleSignUp()">Create Account</button>
   </div>
 </div>
+
+<!-- INLINE SCRIPT HELPER FOR DYNAMIC AI PROMPT GENERATOR -->
+<script>
+function updateAiPromptPreview() {
+  const stdSelect = document.getElementById("authorStdSelect");
+  const subSelect = document.getElementById("authorSubSelect");
+  const promptBox = document.getElementById("aiStudioPromptTextarea");
+  if (!promptBox) return;
+
+  const std = stdSelect && stdSelect.value ? stdSelect.value : "5";
+  const sub = subSelect && subSelect.value ? subSelect.value : "Science";
+
+  const generatedPrompt = `You are an expert examination question author for Hari Mandir School.
+Analyze the attached textbook content and generate a minimum of 50 comprehensive, strictly factual Multiple Choice Questions (MCQs) with 4 options each.
+
+STRICT CONSTRAINTS & RULES:
+1. TARGET AUDIENCE & BOUNDARIES:
+   - Base 100% of the questions and answers EXCLUSIVELY on the provided textbook text.
+   - Do NOT assume, extrapolate, or bring in outside facts not mentioned in the source text.
+   - Extract granular details across all sections to meet the minimum 100 questions requirement without repetition.
+
+2. HIERARCHY MAPPING:
+   - Standard: Use "${std}"
+   - Subject: Use "${sub}"
+   - Chapter / Unit: Automatically identify and extract the main Unit / Chapter heading directly from the uploaded text.
+   - Topic: Automatically identify and extract the relevant sub-heading / section topic for each question.
+
+3. STRICT OUTPUT FORMAT:
+   - Respond ONLY with raw CSV text (comma-separated values).
+   - Do NOT include markdown blocks, backticks (\`\`\`csv), introductory text, notes, or concluding remarks.
+   - Double quotes MUST enclose any field that contains commas, quotes, or special characters.
+
+4. EXACT CSV HEADER (Line 1):
+Standard,Subject,Chapter,Topic,Question,OptA,OptB,OptC,OptD,CorrectOpt
+
+5. COLUMN SPECIFICATIONS:
+   - Standard: "${std}"
+   - Subject: "${sub}"
+   - Chapter: Auto-detected Chapter/Unit title
+   - Topic: Auto-detected Sub-topic/Section title
+   - Question: Full question sentence
+   - OptA: Choice 1
+   - OptB: Choice 2
+   - OptC: Choice 3
+   - OptD: Choice 4
+   - CorrectOpt: Single digit integer from 1 to 4 (1 for OptA, 2 for OptB, 3 for OptC, 4 for OptD)
+
+TEXTBOOK CONTENT:
+"""
+[PASTE YOUR TEXTBOOK PLAIN TEXT OR ATTACH PDF/DOCUMENT HERE]
+"""`;
+
+  promptBox.value = generatedPrompt;
+}
+
+function copyAiStudioPrompt() {
+  const promptBox = document.getElementById("aiStudioPromptTextarea");
+  if (!promptBox) return;
+  navigator.clipboard.writeText(promptBox.value).then(() => {
+    const btn = document.getElementById("btnCopyPrompt");
+    if (btn) {
+      btn.innerText = "✅ Copied!";
+      setTimeout(() => { btn.innerText = "📋 Copy Prompt"; }, 2000);
+    }
+  });
+}
+
+// Ensure prompt initializes after DOM loads and dropdowns populate
+window.addEventListener("DOMContentLoaded", () => {
+  setTimeout(updateAiPromptPreview, 500);
+});
+</script>
 
 <script src="script.js"></script>
 </body>
