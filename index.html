@@ -230,13 +230,20 @@
         </div>
       </div>
 
-      <!-- Step 2: Upload CSV File -->
-      <h4>📥 Step 2: Upload Generated CSV File</h4>
-      <p class="notice">Upload your saved <code>questions.csv</code> file. Serial IDs will be calculated sequentially from the last question in Google Sheets.</p>
+      <!-- Step 2: Upload CSV File or Direct Paste -->
+      <h4>📥 Step 2: Upload Generated CSV File or Paste Raw CSV</h4>
+      <p class="notice">Upload your saved <code>questions.csv</code> file or paste the raw CSV text below. Serial IDs will be calculated sequentially from the last question in Google Sheets.</p>
       
       <div class="form-group">
         <label>Select CSV File (.csv):</label>
         <input type="file" id="standaloneCsvInput" accept=".csv,text/csv" onchange="handleStandaloneCsv(event)">
+      </div>
+
+      <!-- Direct CSV Paste Box -->
+      <div class="form-group" style="margin-top: 15px;">
+        <label><strong>Or Paste Raw CSV Text Here:</strong></label>
+        <textarea id="rawCsvTextInput" rows="5" placeholder="Paste the CSV text copied from AI Studio here..." style="width: 100%; font-family: monospace; font-size: 0.8rem; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px;"></textarea>
+        <button class="btn btn-primary" onclick="handleDirectCsvPaste()" style="width: 100%; margin-top: 8px;">🔍 Parse Pasted CSV</button>
       </div>
 
       <div id="standaloneCsvPreviewArea" class="hidden margin-top">
