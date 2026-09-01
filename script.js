@@ -1132,3 +1132,175 @@ function filterPrincipalScores() {
     `;
   });
 }
+// --- ADDITIONAL JAVASCRIPT FOR CSV PARSING & UPLOADING ---
+
+function switchCreateMethod(method) {
+  const btnManual = document.getElementById("btnMethodManual");
+  const btnAi = document.getElementById("btnMethodAi");
+  const btnCsv = document.getElementById("btnMethodCsv");
+
+  if (btnManual) btnManual.className = (method === 'manual') ? 'btn btn-primary flex-1' : 'btn btn-outline-dark flex-1';
+  if (btnAi) btnAi.className = (method === 'ai') ? 'btn btn-primary flex-1' : 'btn btn-outline-dark flex-1';
+  if (btnCsv) btnCsv.className = (method === 'csv') ? 'btn btn-primary flex-1' : 'btn btn-outline-dark flex-1';
+
+  const secManual = document.getElementById("sectionManualCreate");
+  const secAi = document.getElementById("sectionAiCreate");
+  const secCsv = document.getElementById("sectionCsvCreate");
+
+  if (secManual) secManual.classList.toggle("hidden", method !== 'manual');
+  if (secAi) secAi.classList.toggle("hidden", method !== 'ai');
+  if (secCsv) secCsv.classList.toggle("hidden", method !== 'csv');
+}
+
+let globalStandaloneCsvList = [];
+
+function parseCustomCsv(text) {
+  const lines = [];
+  let row = [];
+  let inQuotes = false;
+  let currentField = '';
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const nextChar = text[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        currentField += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      row.push(currentField.trim());
+      currentField = '';
+    } else if ((char === '\r' || char === '\n') && !inQuotes) {
+      if (char === '\r' && nextChar === '\n') i++;
+      row.push(currentField.trim());
+      if (row.some(f => f.length > 0)) lines.push(row);
+      row = [];
+      currentField = '';
+    } else {
+      currentField += char;
+    }
+  }
+  if (currentField || row.length > 0) {
+    row.push(currentField.trim());
+    if (row.some(f => f.length > 0)) lines.push(row);
+  }
+  return lines;
+}
+
+function handleStandaloneCsv(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const rows = parseCustomCsv(e.target.result);
+    if (rows.length <= 1) {
+      alert("The uploaded CSV file does not contain valid question rows.");
+      return;
+    }
+
+    const header = rows[0].map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
+    globalStandaloneCsvList = [];
+
+    let idxQ = header.findIndex(h => h.includes("question"));
+    let idxA = header.findIndex(h => h === "opta" || h === "optiona" || h === "a");
+    let idxB = header.findIndex(h => h === "optb" || h === "optionb" || h === "b");
+    let idxC = header.findIndex(h => h === "optc" || h === "optionc" || h === "c");
+    let idxD = header.findIndex(h => h === "optd" || h === "optiond" || h === "d");
+    let idxAns = header.findIndex(h => h.includes("correct") || h.includes("ans"));
+    let idxStd = header.findIndex(h => h.includes("std") || h.includes("class"));
+    let idxSub = header.findIndex(h => h.includes("sub"));
+    let idxChap = header.findIndex(h => h.includes("chap") || h.includes("unit"));
+    let idxTopic = header.findIndex(h => h.includes("topic"));
+
+    if (idxQ === -1 && rows[0].length >= 6) {
+      idxQ = 0; idxA = 1; idxB = 2; idxC = 3; idxD = 4; idxAns = 5;
+    }
+
+    const fallbackStd = document.getElementById("authorStdSelect") ? document.getElementById("authorStdSelect").value : "5";
+    const fallbackSub = document.getElementById("authorSubSelect") ? document.getElementById("authorSubSelect").value : "Science";
+    const fallbackChap = document.getElementById("authorChapterInput") ? (document.getElementById("authorChapterInput").value.trim() || "General") : "General";
+    const fallbackTopic = document.getElementById("authorTopicInput") ? (document.getElementById("authorTopicInput").value.trim() || "All") : "All";
+
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r[idxQ] || r[idxQ].trim() === "") continue;
+
+      let correct = 1;
+      if (idxAns !== -1 && r[idxAns]) {
+        const raw = r[idxAns].toString().toUpperCase().trim();
+        if (raw === "A" || raw === "1" || raw.includes("A")) correct = 1;
+        else if (raw === "B" || raw === "2" || raw.includes("B")) correct = 2;
+        else if (raw === "C" || raw === "3" || raw.includes("C")) correct = 3;
+        else if (raw === "D" || raw === "4" || raw.includes("D")) correct = 4;
+      }
+
+      globalStandaloneCsvList.push({
+        standard: (idxStd !== -1 && r[idxStd]) ? r[idxStd] : fallbackStd,
+        subject: (idxSub !== -1 && r[idxSub]) ? r[idxSub] : fallbackSub,
+        chapter: (idxChap !== -1 && r[idxChap]) ? r[idxChap] : fallbackChap,
+        topic: (idxTopic !== -1 && r[idxTopic]) ? r[idxTopic] : fallbackTopic,
+        question: r[idxQ],
+        optA: (idxA !== -1 && r[idxA]) ? r[idxA] : "",
+        optB: (idxB !== -1 && r[idxB]) ? r[idxB] : "",
+        optC: (idxC !== -1 && r[idxC]) ? r[idxC] : "",
+        optD: (idxD !== -1 && r[idxD]) ? r[idxD] : "",
+        correctOpt: correct
+      });
+    }
+
+    document.getElementById("standaloneCsvCount").innerText = globalStandaloneCsvList.length;
+    const previewBox = document.getElementById("standaloneCsvList");
+    previewBox.innerHTML = globalStandaloneCsvList.map((q, idx) => `
+      <div style="padding: 6px 0; border-bottom: 1px solid #e2e8f0;">
+        <strong>${idx + 1}. ${q.question}</strong><br>
+        <span style="color:#64748b;">A) ${q.optA} | B) ${q.optB} | C) ${q.optC} | D) ${q.optD}</span><br>
+        <span style="color:#059669; font-weight:600;">Correct: Option ${q.correctOpt} [Class ${q.standard} - ${q.subject}]</span>
+      </div>
+    `).join("");
+
+    document.getElementById("standaloneCsvPreviewArea").classList.remove("hidden");
+  };
+  reader.readAsText(file);
+}
+
+async function submitStandaloneCsvToSheet() {
+  if (!globalStandaloneCsvList || globalStandaloneCsvList.length === 0) {
+    return alert("No CSV questions loaded to upload.");
+  }
+
+  const btn = document.getElementById("btnUploadStandaloneCsv");
+  btn.disabled = true;
+  btn.innerText = `Uploading ${globalStandaloneCsvList.length} questions to Google Sheet...`;
+
+  const payload = {
+    action: "importCsvQuestions",
+    userId: (currentUser && currentUser.id) ? currentUser.id : "PRINCIPAL",
+    role: (currentUser && currentUser.role) ? currentUser.role : "principal",
+    questions: globalStandaloneCsvList
+  };
+
+  try {
+    const data = await callAppsScript(payload);
+    btn.disabled = false;
+    btn.innerText = "🚀 Upload All to Google Sheet (Auto Serial IDs)";
+
+    if (data && data.success) {
+      alert(`✅ Uploaded ${data.count} questions successfully!\nAssigned Serial IDs: ${data.startId} to ${data.endId}`);
+      document.getElementById("standaloneCsvInput").value = "";
+      document.getElementById("standaloneCsvPreviewArea").classList.add("hidden");
+      globalStandaloneCsvList = [];
+      if (typeof loadPortalData === "function") await loadPortalData();
+    } else {
+      alert("Error: " + (data ? data.error : "Failed to upload questions"));
+    }
+  } catch (err) {
+    btn.disabled = false;
+    btn.innerText = "🚀 Upload All to Google Sheet (Auto Serial IDs)";
+    alert("Connection error: " + err.message);
+  }
+}
