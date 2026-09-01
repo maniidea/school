@@ -1304,3 +1304,11 @@ async function submitStandaloneCsvToSheet() {
     alert("Connection error: " + err.message);
   }
 }
+// Add this function to script.js
+function handleDirectCsvPaste() {
+  const text = document.getElementById("rawCsvTextInput").value.trim();
+  if (!text) return alert("Please paste the CSV text first.");
+  
+  // Uses the existing CSV parser
+  handleStandaloneCsv({ target: { files: [new Blob([text], { type: 'text/csv' })] } });
+}
