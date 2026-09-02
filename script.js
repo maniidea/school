@@ -1159,13 +1159,17 @@ function switchCreateMethod(method) {
 let globalStandaloneCsvList = [];
 
 // Robust CSV Parser: handles quotes, commas, and line merges
+// Bulletproof CSV line & column splitter (handles explanations with quotes and inline mergers)
 function parseCustomCsv(text) {
   if (!text) return [];
 
   let cleanText = text.trim()
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
-    .replace(/([1-4])\s+(\d{1,2},[A-Za-z\s]+,)/g, "$1\n$2");
+    // Rule 1: Fix when new line merges right after a closing quote: ." 1,Science or ," 1,Science
+    .replace(/("\s*)([0-9]{1,2},[A-Za-z\s]+,)/g, '"\n$2')
+    // Rule 2: Fix when new line merges right after integer/unquoted answer: 2 1,Science
+    .replace(/([0-9])(\s+)([0-9]{1,2},[A-Za-z\s]+,)/g, '$1\n$3');
 
   const lines = [];
   let row = [];
@@ -1201,7 +1205,6 @@ function parseCustomCsv(text) {
   }
   return lines;
 }
-
 function processParsedCsvRows(rows) {
   if (!rows || rows.length === 0) {
     alert("The uploaded/pasted CSV does not contain valid data rows.");
