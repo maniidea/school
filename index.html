@@ -221,7 +221,7 @@
           <a href="https://aistudio.google.com/prompts/new_chat" target="_blank" class="btn btn-outline" style="font-size:0.8rem; padding:4px 10px; text-decoration:none;">🚀 Open Google AI Studio</a>
         </div>
         <p class="notice" style="margin-bottom:10px; color:#166534;">
-          The prompt below automatically adapts to your selected <strong>Class</strong> and <strong>Subject</strong>. Copy it, paste it into Google AI Studio with your text/PDF, and save the resulting CSV.
+          The prompt below automatically generates the full 11 columns (including <strong>Explanation</strong>). <code>ID</code>, <code>CreatorId</code>, <code>CreatorRole</code>, and <code>CreatedAt</code> are assigned automatically by the system.
         </p>
         
         <div style="position:relative;">
@@ -232,7 +232,7 @@
 
       <!-- Step 2: Upload CSV File or Direct Paste -->
       <h4>📥 Step 2: Upload Generated CSV File or Paste Raw CSV</h4>
-      <p class="notice">Upload your saved <code>questions.csv</code> file or paste the raw CSV text below. Serial IDs will be calculated sequentially from the last question in Google Sheets.</p>
+      <p class="notice">Upload your saved <code>questions.csv</code> file or paste the raw CSV text below. All 15 columns are written to Google Sheets with serial IDs.</p>
       
       <div class="form-group">
         <label>Select CSV File (.csv):</label>
@@ -491,43 +491,32 @@ function updateAiPromptPreview() {
   const sub = subSelect && subSelect.value ? subSelect.value : "Science";
 
   const generatedPrompt = `You are an expert examination question author for Hari Mandir School.
-Analyze the attached textbook content and generate a minimum of 50 comprehensive, strictly factual Multiple Choice Questions (MCQs) with 4 options each.
+Generate exactly 100 comprehensive, non-repetitive Multiple Choice Questions (MCQs) strictly based on the textbook content provided below.
 
-STRICT CONSTRAINTS & RULES:
-1. TARGET AUDIENCE & BOUNDARIES:
-   - Base 100% of the questions and answers EXCLUSIVELY on the provided textbook text.
-   - Do NOT assume, extrapolate, or bring in outside facts not mentioned in the source text.
-   - Extract granular details across all sections to meet the minimum 100 questions requirement without repetition.
+CRITICAL FORMATTING INSTRUCTIONS:
+1. Output format MUST be pure raw CSV text with exactly 11 columns per line.
+2. Every single question must be on a SEPARATE NEW LINE. NEVER combine multiple questions on one line.
+3. Wrap ALL text columns (Chapter, Topic, Question, OptA, OptB, OptC, OptD, Explanation) in double quotes ("...") so punctuation marks and commas never break columns.
+4. CorrectOpt MUST strictly be an integer: 1 (for OptA), 2 (for OptB), 3 (for OptC), or 4 (for OptD).
+5. Explanation MUST state the exact sentence or fact from the text proving why the answer is correct.
+6. Do NOT output markdown wrappers or code fences (no \`\`\` or \`\`\`csv).
+7. Do NOT include greetings, numbering, commentary, notes, or concluding text. Output starts with the header and ends with question 100.
 
-2. HIERARCHY MAPPING:
-   - Standard: Use "${std}"
-   - Subject: Use "${sub}"
-   - Chapter / Unit: Automatically identify and extract the main Unit / Chapter heading directly from the uploaded text.
-   - Topic: Automatically identify and extract the relevant sub-heading / section topic for each question.
+LINE 1 MUST BE THIS EXACT HEADER:
+Standard,Subject,Chapter,Topic,Question,OptA,OptB,OptC,OptD,CorrectOpt,Explanation
 
-3. STRICT OUTPUT FORMAT:
-   - Respond ONLY with raw CSV text (comma-separated values).
-   - Do NOT include markdown blocks, backticks (\`\`\`csv), introductory text, notes, or concluding remarks.
-   - Double quotes MUST enclose any field that contains commas, quotes, or special characters.
+LINE 2 ONWARD DATA ROW TEMPLATE:
+${std},${sub},"[Auto Chapter Title]","[Auto Topic/Sub-heading]","[Full Question Statement]","[Option A]","[Option B]","[Option C]","[Option D]",[1-4],"[Exact Explanation / Rationale from Text]"
 
-4. EXACT CSV HEADER (Line 1):
-Standard,Subject,Chapter,Topic,Question,OptA,OptB,OptC,OptD,CorrectOpt
-
-5. COLUMN SPECIFICATIONS:
-   - Standard: "${std}"
-   - Subject: "${sub}"
-   - Chapter: Auto-detected Chapter/Unit title
-   - Topic: Auto-detected Sub-topic/Section title
-   - Question: Full question sentence
-   - OptA: Choice 1
-   - OptB: Choice 2
-   - OptC: Choice 3
-   - OptD: Choice 4
-   - CorrectOpt: Single digit integer from 1 to 4 (1 for OptA, 2 for OptB, 3 for OptC, 4 for OptD)
+CONTENT REQUIREMENTS:
+- Standard: ${std}
+- Subject: ${sub}
+- Quantity: Generate exactly 100 questions.
+- Boundary: Base 100% of questions, options, and explanations strictly on the provided text.
 
 TEXTBOOK CONTENT:
 """
-[PASTE YOUR TEXTBOOK PLAIN TEXT OR ATTACH PDF/DOCUMENT HERE]
+[PASTE YOUR LESSON TEXT OR ATTACH PDF HERE]
 """`;
 
   promptBox.value = generatedPrompt;
@@ -545,7 +534,6 @@ function copyAiStudioPrompt() {
   });
 }
 
-// Ensure prompt initializes after DOM loads and dropdowns populate
 window.addEventListener("DOMContentLoaded", () => {
   setTimeout(updateAiPromptPreview, 500);
 });
