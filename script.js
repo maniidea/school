@@ -102,6 +102,7 @@ async function loadPortalData() {
         localStorage.setItem("hmsUser", JSON.stringify(currentUser));
       }
       populateAllDropdowns();
+      if (typeof updateAiPromptPreview === "function") updateAiPromptPreview();
     }
   } catch (err) {
     console.warn("Using offline defaults:", err);
@@ -244,6 +245,7 @@ function syncAuthorSubjects() {
   const allowedSubs = (currentUser && currentUser.subjects && currentUser.subjects.length > 0 && !currentUser.subjects.includes("All")) ? currentUser.subjects : GLOBAL_SUBJECTS;
   subSelect.innerHTML = allowedSubs.map(s => `<option value="${s}">${s}</option>`).join("");
   syncAuthorChapters();
+  if (typeof updateAiPromptPreview === "function") updateAiPromptPreview();
 }
 
 function syncAuthorChapters() {
@@ -256,6 +258,7 @@ function syncAuthorChapters() {
   const sub = subSelect.value.toLowerCase();
   const matched = masterCurriculum.filter(c => c.standard === std && (c.subject || '').toLowerCase() === sub);
   datalist.innerHTML = matched.map(c => `<option value="${c.chapter}">`).join("");
+  if (typeof updateAiPromptPreview === "function") updateAiPromptPreview();
 }
 
 function openModal(id) {
@@ -350,7 +353,10 @@ function switchTab(tab, eventTarget) {
     document.getElementById("playTab").classList.remove("hidden");
     resetQuizView();
   }
-  if (tab === "create") document.getElementById("createTab").classList.remove("hidden");
+  if (tab === "create") {
+    document.getElementById("createTab").classList.remove("hidden");
+    if (typeof updateAiPromptPreview === "function") updateAiPromptPreview();
+  }
   if (tab === "manage") {
     document.getElementById("manageTab").classList.remove("hidden");
     renderManageTable();
@@ -577,13 +583,6 @@ async function finishQuiz() {
   };
 
   try { await callAppsScript(payload); } catch (e) { console.warn("Score submission note:", e); }
-}
-
-function switchCreateMethod(method) {
-  document.getElementById("btnMethodManual").className = method === 'manual' ? 'btn btn-primary flex-1' : 'btn btn-outline-dark flex-1';
-  document.getElementById("btnMethodAi").className = method === 'ai' ? 'btn btn-secondary flex-1' : 'btn btn-outline-dark flex-1';
-  document.getElementById("sectionManualCreate").classList.toggle("hidden", method !== 'manual');
-  document.getElementById("sectionAiCreate").classList.toggle("hidden", method !== 'ai');
 }
 
 async function publishManualQuestion() {
@@ -1132,7 +1131,10 @@ function filterPrincipalScores() {
     `;
   });
 }
-// --- ADDITIONAL JAVASCRIPT FOR CSV PARSING & UPLOADING ---
+
+// -------------------------------------------------------------
+// UNIFIED CSV PARSING & UPLOADING ENGINE (11 COLUMNS WITH EXPLANATION)
+// -------------------------------------------------------------
 
 function switchCreateMethod(method) {
   const btnManual = document.getElementById("btnMethodManual");
@@ -1140,7 +1142,7 @@ function switchCreateMethod(method) {
   const btnCsv = document.getElementById("btnMethodCsv");
 
   if (btnManual) btnManual.className = (method === 'manual') ? 'btn btn-primary flex-1' : 'btn btn-outline-dark flex-1';
-  if (btnAi) btnAi.className = (method === 'ai') ? 'btn btn-primary flex-1' : 'btn btn-outline-dark flex-1';
+  if (btnAi) btnAi.className = (method === 'ai') ? 'btn btn-secondary flex-1' : 'btn btn-outline-dark flex-1';
   if (btnCsv) btnCsv.className = (method === 'csv') ? 'btn btn-primary flex-1' : 'btn btn-outline-dark flex-1';
 
   const secManual = document.getElementById("sectionManualCreate");
@@ -1150,19 +1152,29 @@ function switchCreateMethod(method) {
   if (secManual) secManual.classList.toggle("hidden", method !== 'manual');
   if (secAi) secAi.classList.toggle("hidden", method !== 'ai');
   if (secCsv) secCsv.classList.toggle("hidden", method !== 'csv');
+
+  if (method === 'csv' && typeof updateAiPromptPreview === "function") updateAiPromptPreview();
 }
 
 let globalStandaloneCsvList = [];
 
+// Robust CSV Parser: handles quotes, commas, and line merges
 function parseCustomCsv(text) {
+  if (!text) return [];
+
+  let cleanText = text.trim()
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/([1-4])\s+(\d{1,2},[A-Za-z\s]+,)/g, "$1\n$2");
+
   const lines = [];
   let row = [];
   let inQuotes = false;
   let currentField = '';
 
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    const nextChar = text[i + 1];
+  for (let i = 0; i < cleanText.length; i++) {
+    const char = cleanText[i];
+    const nextChar = cleanText[i + 1];
 
     if (char === '"') {
       if (inQuotes && nextChar === '"') {
@@ -1174,8 +1186,7 @@ function parseCustomCsv(text) {
     } else if (char === ',' && !inQuotes) {
       row.push(currentField.trim());
       currentField = '';
-    } else if ((char === '\r' || char === '\n') && !inQuotes) {
-      if (char === '\r' && nextChar === '\n') i++;
+    } else if (char === '\n' && !inQuotes) {
       row.push(currentField.trim());
       if (row.some(f => f.length > 0)) lines.push(row);
       row = [];
@@ -1191,6 +1202,118 @@ function parseCustomCsv(text) {
   return lines;
 }
 
+function processParsedCsvRows(rows) {
+  if (!rows || rows.length === 0) {
+    alert("The uploaded/pasted CSV does not contain valid data rows.");
+    return;
+  }
+
+  const fallbackStd = document.getElementById("authorStdSelect") ? document.getElementById("authorStdSelect").value : "5";
+  const fallbackSub = document.getElementById("authorSubSelect") ? document.getElementById("authorSubSelect").value : "Social Studies";
+  const fallbackChap = document.getElementById("authorChapterInput") ? (document.getElementById("authorChapterInput").value.trim() || "General") : "General";
+  const fallbackTopic = document.getElementById("authorTopicInput") ? (document.getElementById("authorTopicInput").value.trim() || "All") : "All";
+
+  const firstRowStr = rows[0].join(" ").toLowerCase();
+  const isHeaderPresent = firstRowStr.includes("standard") || firstRowStr.includes("question");
+  const startIndex = isHeaderPresent ? 1 : 0;
+
+  globalStandaloneCsvList = [];
+
+  for (let i = startIndex; i < rows.length; i++) {
+    let r = rows[i];
+    if (!r || r.length < 5) continue;
+
+    let std = fallbackStd;
+    let sub = fallbackSub;
+    let chap = fallbackChap;
+    let topic = fallbackTopic;
+    let qText = "";
+    let optA = "", optB = "", optC = "", optD = "";
+    let correctRaw = "1";
+    let explanation = "";
+
+    // 11-Column Format (Standard to Explanation)
+    if (r.length >= 11) {
+      std = r[0] || fallbackStd;
+      sub = r[1] || fallbackSub;
+      chap = r[2] || fallbackChap;
+      topic = r[3] || fallbackTopic;
+      qText = r[4];
+      optA = r[5] || "";
+      optB = r[6] || "";
+      optC = r[7] || "";
+      optD = r[8] || "";
+      correctRaw = r[9] || "1";
+      explanation = r[10] || "";
+    } 
+    // 10-Column Format (Standard to CorrectOpt without explanation)
+    else if (r.length >= 10) {
+      std = r[0] || fallbackStd;
+      sub = r[1] || fallbackSub;
+      chap = r[2] || fallbackChap;
+      topic = r[3] || fallbackTopic;
+      qText = r[4];
+      optA = r[5] || "";
+      optB = r[6] || "";
+      optC = r[7] || "";
+      optD = r[8] || "";
+      correctRaw = r[9] || "1";
+      explanation = "Sourced from " + chap;
+    } 
+    // 6-Column Format: Question,OptA,OptB,OptC,OptD,CorrectOpt
+    else if (r.length >= 6) {
+      qText = r[0];
+      optA = r[1] || "";
+      optB = r[2] || "";
+      optC = r[3] || "";
+      optD = r[4] || "";
+      correctRaw = r[5] || "1";
+      explanation = "Standard practice question";
+    }
+
+    if (!qText || qText.trim().length < 3) continue;
+
+    let correctVal = 1;
+    const cleanAns = correctRaw.toString().trim().toUpperCase();
+    if (cleanAns === "A" || cleanAns === "1") correctVal = 1;
+    else if (cleanAns === "B" || cleanAns === "2") correctVal = 2;
+    else if (cleanAns === "C" || cleanAns === "3") correctVal = 3;
+    else if (cleanAns === "D" || cleanAns === "4") correctVal = 4;
+
+    globalStandaloneCsvList.push({
+      standard: std.toString().replace(/class/gi, "").trim(),
+      subject: sub,
+      chapter: chap,
+      topic: topic,
+      question: qText.trim(),
+      optA: optA.trim(),
+      optB: optB.trim(),
+      optC: optC.trim(),
+      optD: optD.trim(),
+      correctOpt: correctVal,
+      explanation: explanation.trim()
+    });
+  }
+
+  if (globalStandaloneCsvList.length === 0) {
+    alert("Could not extract any valid questions. Please ensure you copied complete lines from AI Studio.");
+    return;
+  }
+
+  document.getElementById("standaloneCsvCount").innerText = globalStandaloneCsvList.length;
+  const previewBox = document.getElementById("standaloneCsvList");
+  previewBox.innerHTML = globalStandaloneCsvList.map((q, idx) => `
+    <div style="padding: 8px 0; border-bottom: 1px solid #e2e8f0; font-size: 0.85rem;">
+      <strong style="color:#0f172a;">${idx + 1}. ${q.question}</strong><br>
+      <span style="color:#64748b;">A) ${q.optA} | B) ${q.optB} | C) ${q.optC} | D) ${q.optD}</span><br>
+      <span style="color:#059669; font-weight:600;">Correct: Option ${q.correctOpt} [Class ${q.standard} • ${q.subject} • ${q.chapter}]</span>
+      ${q.explanation ? `<br><small style="color:#084298;"><strong>💡 Explanation:</strong> ${q.explanation}</small>` : ''}
+    </div>
+  `).join("");
+
+  document.getElementById("standaloneCsvPreviewArea").classList.remove("hidden");
+}
+
 function handleStandaloneCsv(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -1198,74 +1321,16 @@ function handleStandaloneCsv(event) {
   const reader = new FileReader();
   reader.onload = function(e) {
     const rows = parseCustomCsv(e.target.result);
-    if (rows.length <= 1) {
-      alert("The uploaded CSV file does not contain valid question rows.");
-      return;
-    }
-
-    const header = rows[0].map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
-    globalStandaloneCsvList = [];
-
-    let idxQ = header.findIndex(h => h.includes("question"));
-    let idxA = header.findIndex(h => h === "opta" || h === "optiona" || h === "a");
-    let idxB = header.findIndex(h => h === "optb" || h === "optionb" || h === "b");
-    let idxC = header.findIndex(h => h === "optc" || h === "optionc" || h === "c");
-    let idxD = header.findIndex(h => h === "optd" || h === "optiond" || h === "d");
-    let idxAns = header.findIndex(h => h.includes("correct") || h.includes("ans"));
-    let idxStd = header.findIndex(h => h.includes("std") || h.includes("class"));
-    let idxSub = header.findIndex(h => h.includes("sub"));
-    let idxChap = header.findIndex(h => h.includes("chap") || h.includes("unit"));
-    let idxTopic = header.findIndex(h => h.includes("topic"));
-
-    if (idxQ === -1 && rows[0].length >= 6) {
-      idxQ = 0; idxA = 1; idxB = 2; idxC = 3; idxD = 4; idxAns = 5;
-    }
-
-    const fallbackStd = document.getElementById("authorStdSelect") ? document.getElementById("authorStdSelect").value : "5";
-    const fallbackSub = document.getElementById("authorSubSelect") ? document.getElementById("authorSubSelect").value : "Science";
-    const fallbackChap = document.getElementById("authorChapterInput") ? (document.getElementById("authorChapterInput").value.trim() || "General") : "General";
-    const fallbackTopic = document.getElementById("authorTopicInput") ? (document.getElementById("authorTopicInput").value.trim() || "All") : "All";
-
-    for (let i = 1; i < rows.length; i++) {
-      const r = rows[i];
-      if (!r[idxQ] || r[idxQ].trim() === "") continue;
-
-      let correct = 1;
-      if (idxAns !== -1 && r[idxAns]) {
-        const raw = r[idxAns].toString().toUpperCase().trim();
-        if (raw === "A" || raw === "1" || raw.includes("A")) correct = 1;
-        else if (raw === "B" || raw === "2" || raw.includes("B")) correct = 2;
-        else if (raw === "C" || raw === "3" || raw.includes("C")) correct = 3;
-        else if (raw === "D" || raw === "4" || raw.includes("D")) correct = 4;
-      }
-
-      globalStandaloneCsvList.push({
-        standard: (idxStd !== -1 && r[idxStd]) ? r[idxStd] : fallbackStd,
-        subject: (idxSub !== -1 && r[idxSub]) ? r[idxSub] : fallbackSub,
-        chapter: (idxChap !== -1 && r[idxChap]) ? r[idxChap] : fallbackChap,
-        topic: (idxTopic !== -1 && r[idxTopic]) ? r[idxTopic] : fallbackTopic,
-        question: r[idxQ],
-        optA: (idxA !== -1 && r[idxA]) ? r[idxA] : "",
-        optB: (idxB !== -1 && r[idxB]) ? r[idxB] : "",
-        optC: (idxC !== -1 && r[idxC]) ? r[idxC] : "",
-        optD: (idxD !== -1 && r[idxD]) ? r[idxD] : "",
-        correctOpt: correct
-      });
-    }
-
-    document.getElementById("standaloneCsvCount").innerText = globalStandaloneCsvList.length;
-    const previewBox = document.getElementById("standaloneCsvList");
-    previewBox.innerHTML = globalStandaloneCsvList.map((q, idx) => `
-      <div style="padding: 6px 0; border-bottom: 1px solid #e2e8f0;">
-        <strong>${idx + 1}. ${q.question}</strong><br>
-        <span style="color:#64748b;">A) ${q.optA} | B) ${q.optB} | C) ${q.optC} | D) ${q.optD}</span><br>
-        <span style="color:#059669; font-weight:600;">Correct: Option ${q.correctOpt} [Class ${q.standard} - ${q.subject}]</span>
-      </div>
-    `).join("");
-
-    document.getElementById("standaloneCsvPreviewArea").classList.remove("hidden");
+    processParsedCsvRows(rows);
   };
   reader.readAsText(file);
+}
+
+function handleDirectCsvPaste() {
+  const text = document.getElementById("rawCsvTextInput").value.trim();
+  if (!text) return alert("Please paste the CSV text copied from AI Studio first.");
+  const rows = parseCustomCsv(text);
+  processParsedCsvRows(rows);
 }
 
 async function submitStandaloneCsvToSheet() {
@@ -1292,6 +1357,7 @@ async function submitStandaloneCsvToSheet() {
     if (data && data.success) {
       alert(`✅ Uploaded ${data.count} questions successfully!\nAssigned Serial IDs: ${data.startId} to ${data.endId}`);
       document.getElementById("standaloneCsvInput").value = "";
+      document.getElementById("rawCsvTextInput").value = "";
       document.getElementById("standaloneCsvPreviewArea").classList.add("hidden");
       globalStandaloneCsvList = [];
       if (typeof loadPortalData === "function") await loadPortalData();
@@ -1303,12 +1369,4 @@ async function submitStandaloneCsvToSheet() {
     btn.innerText = "🚀 Upload All to Google Sheet (Auto Serial IDs)";
     alert("Connection error: " + err.message);
   }
-}
-// Add this function to script.js
-function handleDirectCsvPaste() {
-  const text = document.getElementById("rawCsvTextInput").value.trim();
-  if (!text) return alert("Please paste the CSV text first.");
-  
-  // Uses the existing CSV parser
-  handleStandaloneCsv({ target: { files: [new Blob([text], { type: 'text/csv' })] } });
 }
